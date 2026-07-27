@@ -132,10 +132,10 @@ adb shell am start -n com.wirth.hebt9/.MainActivity --ez demo true
 - [x] Signed AAB (`build-aab\t9-still-alive-dialer.aab`)
 - [x] targetSdk 36
 - [x] Upload keystore created — **back it up off-machine**
-- [ ] 512×512 icon
-- [ ] 1024×500 feature graphic
+- [x] 512×512 icon — `icon-512.png`
+- [x] 1024×500 feature graphic — `feature-graphic.png`
+- [x] Privacy policy URL live — https://wirtheim.github.io/t9-still-alive-dialer/privacy.html
 - [ ] Second screenshot
-- [ ] Privacy policy URL live
 - [ ] Data safety form submitted
 - [ ] Closed testing: 12 testers × 14 continuous days (personal accounts created after
       November 2023 only)
