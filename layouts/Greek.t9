@@ -1,0 +1,16 @@
+# Greek keypad layout for T9 Still Alive Dialer.
+# Import via Settings -> Keypad layout -> Import layout file...
+#
+# Accented vowels sit on the same key as their base letter, so a name typed
+# without accents still matches one stored with them.
+
+name = Greek
+
+2 = α β γ ά
+3 = δ ε ζ έ
+4 = η θ ι ή ί ϊ ΐ
+5 = κ λ μ
+6 = ν ξ ο ό
+7 = π ρ σ ς
+8 = τ υ φ ύ ϋ ΰ
+9 = χ ψ ω ώ

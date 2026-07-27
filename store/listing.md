@@ -1,0 +1,136 @@
+# Play Console listing copy
+
+Field lengths are Google's limits. Counts below are the current text.
+
+---
+
+## App name  (max 30)
+
+```
+T9 Still Alive Dialer
+```
+21 characters.
+
+---
+
+## Short description  (max 80)
+
+**English**
+```
+Real T9 contact search for Hebrew and any script. Samsung's dialer stays intact.
+```
+79 characters.
+
+**עברית**
+```
+חיפוש T9 אמיתי בעברית ובכל שפה. החייגן של סמסונג נשאר בדיוק כפי שהוא.
+```
+68 characters.
+
+---
+
+## Full description  (max 4000)
+
+**English**
+
+```
+Made in Israel. Built for everyone.
+
+Your phone can edit photos with AI.
+
+It can recognise the Moon, erase people from pictures, translate conversations in real
+time, and recommend a restaurant 8,700 kilometres away.
+
+But if your system language isn't one of the few Samsung chose to support, it suddenly
+forgets how to find your contacts.
+
+Or Mum. Or Dad. Or أحمد. Or Γιώργος. Or almost anyone who doesn't happen to use one of
+the lucky alphabets supported by Samsung's T9 engine.
+
+The funny part is that the letters are already there. They're hiding inside the dialer
+like movie extras who never got a single line. You can find them in the code. They even
+appear on the keypad.
+
+The search engine simply ignores them with the quiet confidence of someone who stopped
+caring at 4 p.m.
+
+So we wrote the missing half.
+
+Not a new dialer. Not a replacement. Not a revolution. Just the part that should have
+existed in the first place.
+
+Samsung's dialer stays exactly as it is. Call recording stays. Call logs stay. The
+in-call screen stays. The only difference is that your phone finally remembers not
+everyone speaks the same twenty-six letters.
+
+FEATURES
+• Real T9 contact search
+• Hebrew included out of the box
+• Support for virtually any language through simple .t9 mapping files
+• Matches every word, not just the first
+• Language-aware character mapping
+• Frequent contacts
+• Default numbers for multi-number contacts
+• Themes and icons
+• Around 37 KB of code doing a job a multi-billion-dollar company decided could wait
+  another year
+
+PRIVACY
+No Internet permission. No cloud. No servers. No analytics. Nobody knows who you call.
+Just you, your contacts, and a phone that's finally doing its job.
+
+LICENSE
+Released under CC BY-NC-ND 4.0. Free to use, study and redistribute with attribution.
+No commercial use. No modified redistributions.
+
+Because Android was supposed to be open. And an operating system that forgets languages
+is a bit like a dictionary that only knows the letter A.
+
+Some phones learn AI. We just taught one to remember your language.
+
+Source: https://github.com/wirtheim/t9-still-alive-dialer
+```
+
+**עברית** — the Hebrew text is in [README.he.md](../README.he.md); paste it as the
+Hebrew (`he-IL`) localisation of the full description.
+
+---
+
+## Graphics still needed
+
+| Asset | Spec | Status |
+|-------|------|--------|
+| App icon | 512×512 PNG, 32-bit, no alpha | TODO — render from `res/drawable/ic_logo.xml` |
+| Feature graphic | 1024×500 PNG/JPG, no alpha | TODO |
+| Phone screenshots | 2–8, 16:9 or 9:16, 320–3840 px | 1 of 2 minimum — `01-search.png` (1080×2340) |
+
+Screenshots are captured in demo mode so no real contact is ever published:
+
+```
+adb shell am start -n com.wirth.hebt9/.MainActivity --ez demo true
+```
+
+---
+
+## Data safety form
+
+- **Personal info → Contacts**: collected? **No.** The app reads contacts on-device to
+  build its index; nothing is transmitted or stored off-device. Declare "no data
+  collected or shared".
+- **Permissions**: `READ_CONTACTS`, `CALL_PHONE`. Neither is in Google's restricted
+  permission set (that covers SMS and Call Log), so no declaration form is required.
+- **Privacy policy URL**: required because the app accesses contacts. Host on GitHub
+  Pages from this repository.
+
+## Release checklist
+
+- [x] Signed AAB (`build-aab\t9-still-alive-dialer.aab`)
+- [x] targetSdk 36
+- [x] Upload keystore created — **back it up off-machine**
+- [ ] 512×512 icon
+- [ ] 1024×500 feature graphic
+- [ ] Second screenshot
+- [ ] Privacy policy URL live
+- [ ] Data safety form submitted
+- [ ] Closed testing: 12 testers × 14 continuous days (personal accounts created after
+      November 2023 only)

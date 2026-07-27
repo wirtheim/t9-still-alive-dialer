@@ -1,0 +1,15 @@
+# Russian (Cyrillic) keypad layout for T9 Still Alive Dialer.
+# Import via Settings -> Keypad layout -> Import layout file...
+#
+# ё shares key 3 with е, the way it does on a Russian phone keypad.
+
+name = Russian
+
+2 = а б в г
+3 = д е ё ж з
+4 = и й к л
+5 = м н о п
+6 = р с т у
+7 = ф х ц ч
+8 = ш щ ъ ы
+9 = ь э ю я
