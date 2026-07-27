@@ -4,6 +4,25 @@ Field lengths are Google's limits. Counts below are the current text.
 
 ---
 
+## Release state
+
+| | |
+|---|---|
+| Package | `com.wirth.hebt9` — permanent, cannot be changed |
+| Uploaded | `versionCode 5` / `versionName 1.4` |
+| Built from | commit `194b24d`, working tree clean |
+| Artifact | `build-aab\t9-still-alive-dialer.aab`, signed `CN=Wirtheim, O=W-are-theim, C=IL` |
+
+The AAB is a build artifact and is deliberately not in git — `build-aab/` is ignored, so
+binaries never enter the history. That leaves the table above as the only record of which
+commit is live. Keep it current, or cut a tagged GitHub Release instead.
+
+**Next release must use `versionCode 6` or higher.** Play refuses a repeat of a code it has
+already seen, even for a deleted release. The field is at `AndroidManifest.xml:4` and is
+not bumped automatically.
+
+---
+
 ## App name  (max 30)
 
 ```
@@ -96,7 +115,9 @@ Hebrew (`he-IL`) localisation of the full description.
 
 ---
 
-## Graphics still needed
+## Store assets
+
+All present. Regenerate with `make-graphics.ps1` and `capture.ps1` after any UI change.
 
 | Asset | Spec | Status |
 |-------|------|--------|
@@ -137,19 +158,31 @@ The tablet shots come from AVDs created for the purpose:
   collected or shared".
 - **Permissions**: `READ_CONTACTS`, `CALL_PHONE`. Neither is in Google's restricted
   permission set (that covers SMS and Call Log), so no declaration form is required.
-- **Privacy policy URL**: required because the app accesses contacts. Host on GitHub
-  Pages from this repository.
+- **Privacy policy URL**: required because the app accesses contacts. Served from `/docs`
+  in this repository via GitHub Pages —
+  https://wirtheim.github.io/t9-still-alive-dialer/privacy.html
 
 ## Release checklist
 
-- [x] Signed AAB (`build-aab\t9-still-alive-dialer.aab`)
+Done:
+
+- [x] Signed AAB, `versionCode 5`
+- [x] AAB uploaded to Play Console
 - [x] targetSdk 36
-- [x] Upload keystore created — **back it up off-machine**
 - [x] 512×512 icon — `icon-512.png`
 - [x] 1024×500 feature graphic — `feature-graphic.png`
-- [x] Privacy policy URL live — https://wirtheim.github.io/t9-still-alive-dialer/privacy.html
 - [x] Phone screenshots (2)
 - [x] 7-inch and 10-inch tablet screenshots (2 each)
-- [ ] Data safety form submitted
+- [x] Privacy policy URL live
+- [x] Listing copy written, English and Hebrew
+
+Outstanding:
+
+- [ ] **Back up `release.keystore` off this machine.** Until Play App Signing is enabled on
+      the first release, losing it means the app can never be updated — only republished
+      under a new package name, with every install and review lost.
+- [ ] Data safety form — Contacts: *"No, this app does not collect or share any user data"*
+- [ ] Store listing filled in from this file
+- [ ] Hebrew (`he-IL`) localisation added, full description from `README.he.md`
 - [ ] Closed testing: 12 testers × 14 continuous days (personal accounts created after
       November 2023 only)
