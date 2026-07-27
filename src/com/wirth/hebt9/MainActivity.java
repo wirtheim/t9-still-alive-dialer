@@ -439,7 +439,41 @@ public class MainActivity extends Activity {
         }).start();
     }
 
+    /**
+     * Synthetic data for store screenshots, so a public listing never shows a real
+     * contact. In-memory only -- nothing is written to the device. Reachable solely via
+     * an explicit intent extra:
+     *
+     * <pre>adb shell am start -n com.wirth.hebt9/.MainActivity --ez demo true</pre>
+     */
+    private static List<T9Index.Contact> demoContacts() {
+        String[][] rows = {
+            {"אמא", "050-111-2233"},
+            {"אמא של דנה", "052-444-5566"},
+            {"רותי אמא שלי", "054-777-8899"},
+            {"במבה פיצוחים", "03-555-0101"},
+            {"נדב וירטהיים", "050-123-4567"},
+            {"מוסך בדיקה", "03-900-1234"},
+            {"דנה כהן", "052-321-7654"},
+            {"יוסי חשמלאי", "054-808-4321"},
+        };
+        List<T9Index.Contact> out = new ArrayList<T9Index.Contact>();
+        for (int i = 0; i < rows.length; i++) {
+            T9Index.Contact c = new T9Index.Contact();
+            c.id = 900000 + i;
+            c.name = rows[i][0];
+            c.numbers.add(rows[i][1]);
+            c.labels.add("Mobile");
+            c.index();
+            out.add(c);
+        }
+        return out;
+    }
+
     private List<T9Index.Contact> readContacts() {
+        if (getIntent() != null && getIntent().getBooleanExtra("demo", false)) {
+            return demoContacts();
+        }
         List<T9Index.Contact> out = new ArrayList<T9Index.Contact>();
         Map<Long, T9Index.Contact> byId = new HashMap<Long, T9Index.Contact>();
         String[] projection = {

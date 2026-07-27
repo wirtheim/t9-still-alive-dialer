@@ -1,4 +1,6 @@
 build/
+build-aab/
+store/*.apks
 
 # Signing material must never reach a public repo.
 *.keystore
