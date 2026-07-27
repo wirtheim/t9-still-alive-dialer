@@ -1,0 +1,5 @@
+build/
+
+# Signing material must never reach a public repo.
+*.keystore
+*.jks

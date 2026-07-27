@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Launcher and store name. -->
+    <string name="app_name">T9-still alive Dialer</string>
+    <!-- ActionBar title: the full name truncates on narrow screens. -->
+    <string name="app_name_short">T9 Dialer</string>
+</resources>

@@ -1,0 +1,14 @@
+# Arabic keypad layout for Hebrew T9.
+# Import via Settings -> Keypad layout -> Import layout file...
+# Spaces between letters are ignored, so group them however reads best.
+
+name = Arabic
+
+2 = ا ب ت ث
+3 = ج ح خ
+4 = د ذ ر ز
+5 = س ش ص ض
+6 = ط ظ ع غ
+7 = ف ق ك
+8 = ل م ن
+9 = ه و ي ة ى ء
