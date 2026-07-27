@@ -447,15 +447,29 @@ public class MainActivity extends Activity {
      * <pre>adb shell am start -n com.wirth.hebt9/.MainActivity --ez demo true</pre>
      */
     private static List<T9Index.Contact> demoContacts() {
+        // Sized so a screenshot of "343" fills the result list the way a real contact
+        // list would. Roughly half of these match: אמא is exactly 343, while אמגד (3432),
+        // ג'מאל (3435), במבה (3432) and גמגום (34324) merely start with it -- which is
+        // what makes the whole-word ranking visible in the shot.
         String[][] rows = {
             {"אמא", "050-111-2233"},
             {"אמא של דנה", "052-444-5566"},
+            {"אמא רחל", "052-118-2299"},
+            {"אמא של תום", "054-330-6677"},
+            {"אמא ואבא בית", "03-611-2000"},
             {"רותי אמא שלי", "054-777-8899"},
             {"במבה פיצוחים", "03-555-0101"},
+            {"גמגום סטודיו", "077-300-4040"},
+            {"אמגד מוסך", "04-812-3456"},
+            {"ג'מאל אלקטריק", "050-909-1122"},
             {"נדב וירטהיים", "050-123-4567"},
             {"מוסך בדיקה", "03-900-1234"},
             {"דנה כהן", "052-321-7654"},
             {"יוסי חשמלאי", "054-808-4321"},
+            {"שירה לוי", "050-222-3344"},
+            {"אבי גנן", "053-444-1212"},
+            {"מרפאת שיניים", "08-655-7788"},
+            {"טל אברהם", "058-770-9090"},
         };
         List<T9Index.Contact> out = new ArrayList<T9Index.Contact>();
         for (int i = 0; i < rows.length; i++) {
