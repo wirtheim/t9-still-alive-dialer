@@ -6,18 +6,26 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.os.VibratorManager;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -33,6 +41,7 @@ public class SettingsActivity extends Activity {
     private String appliedTheme;
     private TextView defaultsSummary;
     private TextView usageSummary;
+    private TextView searchesSummary;
     private LinearLayout layoutGroupHolder;
 
     @Override
@@ -59,23 +68,45 @@ public class SettingsActivity extends Activity {
     private View buildUi() {
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
-        col.setPadding(dp(20), dp(12), dp(20), dp(28));
+        col.setPadding(dp(16), dp(8), dp(16), dp(28));
 
-        col.addView(header("Appearance"));
-        col.addView(themePicker());
+        LinearLayout appearance = card("Appearance",
+                "Choose light, dark, or follow the system theme.");
+        appearance.addView(themePicker());
+        col.addView(appearance);
 
-        col.addView(header("App icon"));
-        col.addView(iconPicker());
+        LinearLayout icon = card("App icon",
+                "Pick the launcher icon and name the app shows. After a change the launcher "
+                + "may take a moment to refresh.");
+        icon.addView(iconPicker());
+        col.addView(icon);
 
-        col.addView(header("Tapping a result"));
-        col.addView(tapPicker());
+        LinearLayout tap = card("Tapping a result",
+                "What a single tap on a contact does: call its default number, or open the "
+                + "contact card. A long-press always opens the number picker.");
+        tap.addView(tapPicker());
+        col.addView(tap);
 
-        col.addView(header("Default numbers"));
-        col.addView(note("When a contact has more than one number, long-press it to pick "
-                + "which line to use and save it as the default."));
+        LinearLayout wa = card("WhatsApp",
+                "Marks contact numbers that are on WhatsApp and lets you open a chat from the "
+                + "green badge. Detection needs the number saved as a contact and WhatsApp's "
+                + "contact sync enabled; nothing leaves the device. The badge also appears for "
+                + "a number you type that is not in your contacts.");
+        wa.addView(whatsAppPicker());
+        col.addView(wa);
+
+        LinearLayout haptics = card("Key vibration",
+                "A short buzz on each key press. Drag the slider to set the strength; all the "
+                + "way to the left turns it off.");
+        haptics.addView(hapticPicker());
+        col.addView(haptics);
+
+        LinearLayout defaults = card("Default numbers",
+                "When a contact has more than one number, long-press it to pick which line to "
+                + "use and save it as the default.");
         defaultsSummary = note("");
-        col.addView(defaultsSummary);
-        col.addView(button("Clear saved defaults", new View.OnClickListener() {
+        defaults.addView(defaultsSummary);
+        defaults.addView(button("Clear saved defaults", new View.OnClickListener() {
             public void onClick(View v) {
                 Prefs.clearDefaults(SettingsActivity.this);
                 refreshDefaultsSummary();
@@ -84,13 +115,14 @@ public class SettingsActivity extends Activity {
             }
         }));
         refreshDefaultsSummary();
+        col.addView(defaults);
 
-        col.addView(header("Frequent contacts"));
-        col.addView(note("The tiles above the keypad are ranked by how often you call each "
-                + "contact from this app. The tally is local and never leaves the device."));
+        LinearLayout freq = card("Frequent contacts",
+                "The tiles above the keypad are ranked by how often you call each contact from "
+                + "this app. The tally is local and never leaves the device.");
         usageSummary = note("");
-        col.addView(usageSummary);
-        col.addView(button("Reset usage stats", new View.OnClickListener() {
+        freq.addView(usageSummary);
+        freq.addView(button("Reset usage stats", new View.OnClickListener() {
             public void onClick(View v) {
                 Prefs.clearUsage(SettingsActivity.this);
                 refreshUsageSummary();
@@ -99,16 +131,34 @@ public class SettingsActivity extends Activity {
             }
         }));
         refreshUsageSummary();
+        col.addView(freq);
 
-        col.addView(header("Keypad layout"));
-        col.addView(note("Only Hebrew ships with the app. Other scripts are plain .t9 text "
-                + "files you import here -- no new build needed. Sample layouts live in the "
-                + "project repository."));
+        LinearLayout recent = card("Recent searches",
+                "Numbers you type appear as tiles under the frequent contacts, newest first. "
+                + "Tap one to search it again. They are stored only on this device and reset "
+                + "each time you leave the dialer.");
+        searchesSummary = note("");
+        recent.addView(searchesSummary);
+        recent.addView(button("Clear recent searches", new View.OnClickListener() {
+            public void onClick(View v) {
+                Prefs.clearSearches(SettingsActivity.this);
+                refreshSearchesSummary();
+                Toast.makeText(SettingsActivity.this, "Recent searches cleared",
+                        Toast.LENGTH_SHORT).show();
+            }
+        }));
+        refreshSearchesSummary();
+        col.addView(recent);
+
+        LinearLayout layout = card("Keypad layout",
+                "Only Hebrew ships with the app. Other scripts are plain .t9 text files you "
+                + "import here -- no new build needed. Sample layouts live in the project "
+                + "repository. Long-press an imported layout to remove it.");
         layoutGroupHolder = new LinearLayout(this);
         layoutGroupHolder.setOrientation(LinearLayout.VERTICAL);
-        col.addView(layoutGroupHolder);
+        layout.addView(layoutGroupHolder);
         buildLayoutPicker();
-        col.addView(button("Import layout file...", new View.OnClickListener() {
+        layout.addView(button("Import layout file...", new View.OnClickListener() {
             public void onClick(View v) {
                 Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                 pick.addCategory(Intent.CATEGORY_OPENABLE);
@@ -116,9 +166,11 @@ public class SettingsActivity extends Activity {
                 startActivityForResult(pick, REQ_IMPORT);
             }
         }));
+        col.addView(layout);
 
-        col.addView(header("About"));
-        col.addView(aboutBlock());
+        LinearLayout about = card("About", null);
+        about.addView(aboutBlock());
+        col.addView(about);
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(col);
@@ -248,6 +300,152 @@ public class SettingsActivity extends Activity {
         return group;
     }
 
+    /**
+     * A master switch plus three placement toggles. The placements read their raw stored
+     * value (not the master-ANDed getter) so the panel shows what each would be if the
+     * master were on, and they grey out while the master is off.
+     */
+    private View whatsAppPicker() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+
+        final CheckBox results = checkRow("Search results", Prefs.waResultsRaw(this));
+        final CheckBox tiles = checkRow("Frequent contact tiles", Prefs.waTilesRaw(this));
+        final CheckBox panel = checkRow("Number chooser", Prefs.waPanelRaw(this));
+
+        CheckBox master = checkRow("Show WhatsApp badges", Prefs.waEnabled(this));
+        master.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(CompoundButton b, boolean on) {
+                Prefs.setWaEnabled(SettingsActivity.this, on);
+                results.setEnabled(on);
+                tiles.setEnabled(on);
+                panel.setEnabled(on);
+            }
+        });
+        results.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(CompoundButton b, boolean on) {
+                Prefs.setWaInResults(SettingsActivity.this, on);
+            }
+        });
+        tiles.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(CompoundButton b, boolean on) {
+                Prefs.setWaInTiles(SettingsActivity.this, on);
+            }
+        });
+        panel.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(CompoundButton b, boolean on) {
+                Prefs.setWaInPanel(SettingsActivity.this, on);
+            }
+        });
+
+        boolean on = Prefs.waEnabled(this);
+        results.setEnabled(on);
+        tiles.setEnabled(on);
+        panel.setEnabled(on);
+
+        box.addView(master);
+        // The three placements sit indented under the master switch.
+        LinearLayout indent = new LinearLayout(this);
+        indent.setOrientation(LinearLayout.VERTICAL);
+        indent.setPadding(dp(20), 0, 0, 0);
+        indent.addView(results);
+        indent.addView(tiles);
+        indent.addView(panel);
+        box.addView(indent);
+
+        // Which WhatsApp app a badge tap uses. "Ask" offers whatever is installed (so with
+        // both apps present the tap shows a two-item chooser -- the default).
+        box.addView(subLabel("When opening a chat"));
+        final String[] appValues = {Prefs.WA_APP_ASK, Prefs.WA_APP_STD, Prefs.WA_APP_BIZ};
+        String[] appLabels = {"Ask when both are installed", "Always WhatsApp",
+                "Always WhatsApp Business"};
+        RadioGroup appGroup = new RadioGroup(this);
+        String currentApp = Prefs.waApp(this);
+        for (int i = 0; i < appValues.length; i++) {
+            RadioButton rb = new RadioButton(this);
+            rb.setId(View.generateViewId());
+            rb.setText(appLabels[i]);
+            rb.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+            rb.setPadding(dp(8), dp(8), 0, dp(8));
+            rb.setTag(appValues[i]);
+            appGroup.addView(rb);
+            if (appValues[i].equals(currentApp)) {
+                appGroup.check(rb.getId());
+            }
+        }
+        appGroup.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
+            public void onCheckedChanged(RadioGroup g, int id) {
+                View v = g.findViewById(id);
+                if (v != null) {
+                    Prefs.setWaApp(SettingsActivity.this, (String) v.getTag());
+                }
+            }
+        });
+        box.addView(appGroup);
+        return box;
+    }
+
+    private View hapticPicker() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+
+        final TextView value = note("");
+        final SeekBar bar = new SeekBar(this);
+        bar.setMax(Prefs.HAPTIC_MAX);
+        bar.setProgress(Prefs.haptic(this));
+        value.setText(hapticLabel(bar.getProgress()));
+        bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onProgressChanged(SeekBar sb, int p, boolean fromUser) {
+                value.setText(hapticLabel(p));
+            }
+            public void onStartTrackingTouch(SeekBar sb) {
+            }
+            public void onStopTrackingTouch(SeekBar sb) {
+                Prefs.setHaptic(SettingsActivity.this, sb.getProgress());
+                previewHaptic(sb.getProgress());
+            }
+        });
+        box.addView(value);
+        box.addView(bar);
+        return box;
+    }
+
+    private String hapticLabel(int amplitude) {
+        if (amplitude <= Prefs.HAPTIC_OFF) {
+            return "Off";
+        }
+        return "Strength " + Math.round(amplitude * 100f / Prefs.HAPTIC_MAX) + "%";
+    }
+
+    private void previewHaptic(int amplitude) {
+        if (amplitude <= Prefs.HAPTIC_OFF) {
+            return;
+        }
+        try {
+            Vibrator v;
+            if (Build.VERSION.SDK_INT >= 31) {
+                VibratorManager vm = (VibratorManager) getSystemService(VIBRATOR_MANAGER_SERVICE);
+                v = vm == null ? null : vm.getDefaultVibrator();
+            } else {
+                v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
+            }
+            if (v != null && v.hasVibrator()) {
+                v.vibrate(VibrationEffect.createOneShot(18, Math.min(255, amplitude)));
+            }
+        } catch (Exception e) {
+            // preview only; ignore
+        }
+    }
+
+    private CheckBox checkRow(String label, boolean checked) {
+        CheckBox cb = new CheckBox(this);
+        cb.setText(label);
+        cb.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        cb.setPadding(dp(8), dp(10), 0, dp(10));
+        cb.setChecked(checked);
+        return cb;
+    }
+
     // -------------------------------------------------------------- layouts
 
     private void buildLayoutPicker() {
@@ -285,9 +483,6 @@ public class SettingsActivity extends Activity {
             }
         });
         layoutGroupHolder.addView(group);
-        if (names.size() > 1) {
-            layoutGroupHolder.addView(note("Long-press an imported layout to remove it."));
-        }
     }
 
     private void confirmDelete(final String name) {
@@ -394,17 +589,122 @@ public class SettingsActivity extends Activity {
                 : n + " contact(s) have a saved default number.");
     }
 
-    // -------------------------------------------------------------- widgets
+    private void refreshSearchesSummary() {
+        int n = Prefs.searchesCount(this);
+        searchesSummary.setText(n == 0
+                ? "No recent searches yet."
+                : n + " recent search(es) stored.");
+    }
 
-    private TextView header(String text) {
+    // ---------------------------------------------------------------- cards
+
+    /**
+     * A rounded surface card carrying a section. Its title row ends in a small "?" that pops
+     * the explanation, keeping the panel itself uncluttered. Pass null help for no button.
+     */
+    private LinearLayout card(String title, String help) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(16), dp(12), dp(16), dp(14));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(20));
+        bg.setColor(cardColor());
+        bg.setStroke(dp(1), strokeColor());
+        card.setBackground(bg);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, dp(7), 0, dp(7));
+        card.setLayoutParams(lp);
+        card.addView(titleRow(title, help));
+        return card;
+    }
+
+    private View titleRow(String title, String help) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, 0, 0, dp(4));
+
         TextView t = new TextView(this);
-        t.setText(text.toUpperCase());
+        t.setText(title.toUpperCase());
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         t.setLetterSpacing(0.08f);
-        t.setPadding(0, dp(22), 0, dp(6));
         t.setTextColor(accent());
+        row.addView(t, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        if (help != null) {
+            row.addView(helpButton(title, help));
+        }
+        return row;
+    }
+
+    private View helpButton(final String title, final String help) {
+        TextView q = new TextView(this);
+        q.setText("?");
+        q.setGravity(Gravity.CENTER);
+        q.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        q.setTextColor(accent());
+        q.setWidth(dp(28));
+        q.setHeight(dp(28));
+        GradientDrawable ring = new GradientDrawable();
+        ring.setShape(GradientDrawable.OVAL);
+        ring.setStroke(dp(1), accent());
+        q.setBackground(ring);
+        q.setClickable(true);
+        q.setFocusable(true);
+        q.setContentDescription("Help: " + title);
+        q.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                new AlertDialog.Builder(SettingsActivity.this)
+                        .setTitle(title)
+                        .setMessage(help)
+                        .setPositiveButton("Got it", null)
+                        .show();
+            }
+        });
+        return q;
+    }
+
+    /** Slightly elevated surface for a card, subtle on both themes. */
+    private int cardColor() {
+        TypedValue tv = new TypedValue();
+        if (getTheme().resolveAttribute(android.R.attr.colorBackgroundFloating, tv, true)
+                && tv.type >= TypedValue.TYPE_FIRST_COLOR_INT
+                && tv.type <= TypedValue.TYPE_LAST_COLOR_INT) {
+            return tv.data;
+        }
+        int base = resolveColor(android.R.attr.textColorSecondary, Color.GRAY);
+        return Color.argb(16, Color.red(base), Color.green(base), Color.blue(base));
+    }
+
+    /** A subtle outline colour that reads on both themes. */
+    private int strokeColor() {
+        int base = resolveColor(android.R.attr.textColorSecondary, Color.GRAY);
+        return Color.argb(70, Color.red(base), Color.green(base), Color.blue(base));
+    }
+
+    private int resolveColor(int attr, int fallback) {
+        TypedValue tv = new TypedValue();
+        if (getTheme().resolveAttribute(attr, tv, true)) {
+            if (tv.resourceId != 0) {
+                return getResources().getColor(tv.resourceId, getTheme());
+            }
+            return tv.data;
+        }
+        return fallback;
+    }
+
+    private TextView subLabel(String text) {
+        TextView t = new TextView(this);
+        t.setText(text);
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        t.setAllCaps(false);
+        t.setAlpha(0.6f);
+        t.setPadding(dp(2), dp(12), 0, dp(2));
         return t;
     }
+
+    // -------------------------------------------------------------- widgets
 
     private TextView note(String text) {
         TextView t = new TextView(this);
@@ -420,13 +720,18 @@ public class SettingsActivity extends Activity {
         t.setText(label);
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
         t.setGravity(Gravity.CENTER);
-        t.setPadding(dp(16), dp(14), dp(16), dp(14));
+        t.setPadding(dp(16), dp(12), dp(16), dp(12));
         t.setClickable(true);
         t.setFocusable(true);
         t.setTextColor(accent());
-        TypedValue tv = new TypedValue();
-        getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true);
-        t.setBackground(getDrawable(tv.resourceId));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(12));
+        bg.setStroke(dp(1), accent());
+        t.setBackground(bg);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, dp(10), 0, dp(2));
+        t.setLayoutParams(lp);
         t.setOnClickListener(click);
         return t;
     }

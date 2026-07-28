@@ -3,6 +3,7 @@ package com.wirth.hebt9;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ActivityNotFoundException;
 import android.content.ContentUris;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -11,10 +12,16 @@ import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.os.VibratorManager;
 import android.provider.ContactsContract;
+import android.telephony.PhoneNumberUtils;
+import android.telephony.TelephonyManager;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.Menu;
@@ -23,10 +30,14 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
+import android.widget.FrameLayout;
 import android.widget.GridLayout;
 import android.widget.HorizontalScrollView;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.RadioButton;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -62,6 +73,8 @@ public class MainActivity extends Activity {
     private ListView listView;
     private LinearLayout frequentRow;
     private HorizontalScrollView frequentScroll;
+    private LinearLayout historyRow;
+    private HorizontalScrollView historyScroll;
     private BaseAdapter adapter;
     private String pendingNumber;
     private long pendingContactId = -1;
@@ -103,10 +116,21 @@ public class MainActivity extends Activity {
             recreate();
             return;
         }
-        // Defaults or usage stats may have been cleared in the panel while we were away.
+        // The query was cleared on the way out (see onStop), and defaults/usage/history may
+        // have changed in the panel -- refresh() redraws all of it from scratch.
         if (adapter != null) {
-            adapter.notifyDataSetChanged();
-            refreshFrequent();
+            refresh();
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        // Leaving the dialer resets the search so a later visit starts clean. The query is
+        // first filed into the recent-search history so the tiles can bring it back.
+        if (query.length() > 0) {
+            Prefs.addSearch(this, query.toString());
+            query.setLength(0);
         }
     }
 
@@ -159,7 +183,16 @@ public class MainActivity extends Activity {
         queryView = new TextView(this);
         queryView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 32);
         queryView.setGravity(Gravity.CENTER);
-        queryView.setPadding(dp(8), dp(8), dp(8), dp(8));
+        queryView.setPadding(dp(16), dp(10), dp(16), dp(10));
+        queryView.setMinHeight(dp(56));
+        GradientDrawable queryBox = new GradientDrawable();
+        queryBox.setCornerRadius(dp(14));
+        queryBox.setStroke(dp(1), strokeColor());
+        queryView.setBackground(queryBox);
+        LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        qlp.setMargins(dp(10), dp(4), dp(10), dp(6));
+        queryView.setLayoutParams(qlp);
         root.addView(queryView);
 
         frequentRow = new LinearLayout(this);
@@ -169,6 +202,16 @@ public class MainActivity extends Activity {
         frequentScroll.setHorizontalScrollBarEnabled(false);
         frequentScroll.addView(frequentRow);
         root.addView(frequentScroll);
+
+        // Recent typed searches, a second tile strip under the frequent contacts. Tapping a
+        // tile re-runs that search.
+        historyRow = new LinearLayout(this);
+        historyRow.setOrientation(LinearLayout.HORIZONTAL);
+        historyRow.setPadding(dp(10), 0, dp(10), dp(6));
+        historyScroll = new HorizontalScrollView(this);
+        historyScroll.setHorizontalScrollBarEnabled(false);
+        historyScroll.addView(historyRow);
+        root.addView(historyScroll);
 
         root.addView(buildPad());
         root.addView(buildActions());
@@ -197,7 +240,7 @@ public class MainActivity extends Activity {
         cell.setGravity(Gravity.CENTER);
         cell.setClickable(true);
         cell.setFocusable(true);
-        cell.setBackground(themedBackground());
+        cell.setBackground(borderedBackground());
 
         TextView digit = new TextView(this);
         digit.setText(key);
@@ -224,6 +267,7 @@ public class MainActivity extends Activity {
 
         cell.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
+                haptic();
                 query.append(key);
                 refresh();
             }
@@ -238,6 +282,7 @@ public class MainActivity extends Activity {
 
         bar.addView(actionButton("Clear", new View.OnClickListener() {
             public void onClick(View v) {
+                haptic();
                 query.setLength(0);
                 refresh();
             }
@@ -245,6 +290,7 @@ public class MainActivity extends Activity {
 
         bar.addView(actionButton("Call", new View.OnClickListener() {
             public void onClick(View v) {
+                haptic();
                 if (!shown.isEmpty()) {
                     onTap(shown.get(shown.size() - 1));
                 } else if (query.length() > 0) {
@@ -255,6 +301,7 @@ public class MainActivity extends Activity {
 
         bar.addView(actionButton("Del", new View.OnClickListener() {
             public void onClick(View v) {
+                haptic();
                 if (query.length() > 0) {
                     query.setLength(query.length() - 1);
                     refresh();
@@ -324,6 +371,55 @@ public class MainActivity extends Activity {
         frequentScroll.setVisibility(n == 0 ? View.GONE : View.VISIBLE);
     }
 
+    /** Recent typed searches, newest first. Hidden while typing, like the frequent row. */
+    private void refreshHistory() {
+        if (query.length() > 0) {
+            historyScroll.setVisibility(View.GONE);
+            return;
+        }
+        List<String> recent = Prefs.searches(this);
+        historyRow.removeAllViews();
+        for (int i = 0; i < recent.size(); i++) {
+            historyRow.addView(buildHistoryTile(recent.get(i)));
+        }
+        historyScroll.setVisibility(recent.isEmpty() ? View.GONE : View.VISIBLE);
+    }
+
+    private View buildHistoryTile(final String q) {
+        LinearLayout tile = new LinearLayout(this);
+        tile.setOrientation(LinearLayout.VERTICAL);
+        tile.setGravity(Gravity.CENTER);
+        tile.setClickable(true);
+        tile.setFocusable(true);
+        tile.setPadding(dp(10), dp(6), dp(10), dp(6));
+
+        GradientDrawable box = new GradientDrawable();
+        box.setCornerRadius(dp(14));
+        box.setStroke(dp(1), strokeColor());
+        tile.setBackground(box);
+
+        TextView digits = new TextView(this);
+        digits.setText(q);
+        digits.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+        digits.setGravity(Gravity.CENTER);
+        tile.addView(digits);
+
+        tile.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                query.setLength(0);
+                query.append(q);
+                refresh();
+            }
+        });
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, dp(48));
+        lp.setMargins(dp(4), 0, dp(4), 0);
+        lp.gravity = Gravity.CENTER_VERTICAL;
+        tile.setLayoutParams(lp);
+        return tile;
+    }
+
     private View buildTile(final T9Index.Contact c) {
         LinearLayout tile = new LinearLayout(this);
         tile.setOrientation(LinearLayout.VERTICAL);
@@ -364,10 +460,55 @@ public class MainActivity extends Activity {
             }
         });
 
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(66), dp(66));
-        lp.setMargins(dp(4), 0, dp(4), 0);
-        tile.setLayoutParams(lp);
-        return tile;
+        // A tile is a fixed 66dp square; the WhatsApp badge floats in its top-end corner,
+        // so it needs a FrameLayout wrapper. Without a badge the wrapper is a harmless
+        // single-child frame.
+        FrameLayout frame = new FrameLayout(this);
+        LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(dp(66), dp(66));
+        flp.setMargins(dp(4), 0, dp(4), 0);
+        frame.setLayoutParams(flp);
+        frame.addView(tile, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        if (Prefs.waInTiles(this) && c.hasWhatsApp()) {
+            ImageView badge = new ImageView(this);
+            badge.setImageResource(R.drawable.ic_whatsapp);
+            int s = dp(20);
+            FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(s, s);
+            bp.gravity = Gravity.TOP | Gravity.END;
+            bp.setMargins(0, dp(2), dp(2), 0);
+            badge.setLayoutParams(bp);
+            badge.setClickable(true);
+            badge.setContentDescription("Open WhatsApp");
+            badge.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    openContactWhatsApp(c);
+                }
+            });
+            frame.addView(badge);
+        }
+        return frame;
+    }
+
+    /** A subtle outline colour that reads on both themes: the text colour at low alpha. */
+    private int strokeColor() {
+        TypedValue tv = new TypedValue();
+        int base = getTheme().resolveAttribute(android.R.attr.textColorSecondary, tv, true)
+                ? getResources().getColor(tv.resourceId, getTheme())
+                : Color.GRAY;
+        return Color.argb(90, Color.red(base), Color.green(base), Color.blue(base));
+    }
+
+    /** A rounded, outlined background with the platform ripple layered on top for touch feedback. */
+    private android.graphics.drawable.Drawable borderedBackground() {
+        GradientDrawable box = new GradientDrawable();
+        box.setCornerRadius(dp(12));
+        box.setStroke(dp(1), strokeColor());
+        android.graphics.drawable.Drawable ripple = themedBackground();
+        android.graphics.drawable.LayerDrawable layers =
+                new android.graphics.drawable.LayerDrawable(
+                        new android.graphics.drawable.Drawable[]{box, ripple});
+        return layers;
     }
 
     /** Accent at low alpha, so the tiles read on both the light and dark themes. */
@@ -399,6 +540,14 @@ public class MainActivity extends Activity {
         return parts[0];
     }
 
+    /** A faint green circle behind the WhatsApp badge, so the enlarged tap area reads as a button. */
+    private android.graphics.drawable.Drawable pillBackground() {
+        GradientDrawable g = new GradientDrawable();
+        g.setShape(GradientDrawable.OVAL);
+        g.setColor(Color.argb(28, 0x25, 0xD3, 0x66));
+        return g;
+    }
+
     /** Borrows the platform's own ripple so the app follows One UI's theme. */
     private android.graphics.drawable.Drawable themedBackground() {
         TypedValue tv = new TypedValue();
@@ -419,6 +568,34 @@ public class MainActivity extends Activity {
 
     private int dp(int v) {
         return Math.round(v * getResources().getDisplayMetrics().density);
+    }
+
+    private Vibrator vibrator() {
+        if (Build.VERSION.SDK_INT >= 31) {
+            VibratorManager vm = (VibratorManager) getSystemService(VIBRATOR_MANAGER_SERVICE);
+            return vm == null ? null : vm.getDefaultVibrator();
+        }
+        return (Vibrator) getSystemService(VIBRATOR_SERVICE);
+    }
+
+    /** A short key-press tick whose strength is the panel's amplitude (0 = off). */
+    private void haptic() {
+        int amp = Prefs.haptic(this);
+        if (amp <= Prefs.HAPTIC_OFF) {
+            return;
+        }
+        Vibrator v = vibrator();
+        if (v == null || !v.hasVibrator()) {
+            return;
+        }
+        if (amp > 255) {
+            amp = 255;
+        }
+        try {
+            v.vibrate(VibrationEffect.createOneShot(18, amp));
+        } catch (Exception e) {
+            // Some devices reject explicit amplitudes; a missing tick is harmless.
+        }
     }
 
     // ------------------------------------------------------------ data
@@ -478,6 +655,8 @@ public class MainActivity extends Activity {
             c.name = rows[i][0];
             c.numbers.add(rows[i][1]);
             c.labels.add("Mobile");
+            // Seed a WhatsApp badge on a subset so a store screenshot can show the feature.
+            c.whatsapp.add(Integer.valueOf(i % 2 == 0 ? T9Index.WA_STD : 0));
             c.index();
             out.add(c);
         }
@@ -490,6 +669,7 @@ public class MainActivity extends Activity {
         }
         List<T9Index.Contact> out = new ArrayList<T9Index.Contact>();
         Map<Long, T9Index.Contact> byId = new HashMap<Long, T9Index.Contact>();
+        Map<Long, Map<String, Integer>> wa = readWhatsApp();
         String[] projection = {
             ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
             ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
@@ -529,6 +709,7 @@ public class MainActivity extends Activity {
                 }
                 contact.numbers.add(number);
                 contact.labels.add(typeLabel(c.getInt(3), c.getString(4)));
+                contact.whatsapp.add(waLookup(wa, id, number));
             }
             for (int i = 0; i < out.size(); i++) {
                 out.get(i).index();
@@ -549,6 +730,211 @@ public class MainActivity extends Activity {
         return label == null ? "" : label.toString();
     }
 
+    // WhatsApp publishes one Data row per registered number. These are the rows the contacts
+    // app itself keys its "Message"/"Voice call" quick actions off -- consumer WhatsApp and
+    // WhatsApp Business each ship their own pair. We read them ONLY to detect which saved
+    // numbers are on which app; opening a chat never touches these rows, it goes through a
+    // wa.me link, so a typed number with no contact row works too. The MIME strings are
+    // undocumented and version-dependent; if WhatsApp ever renames them we simply find no
+    // rows and show no badges (the read degrades on failure).
+    private static final String WA_PKG_STD = "com.whatsapp";
+    private static final String WA_PKG_BIZ = "com.whatsapp.w4b";
+    private static final String WA_STD_PROFILE = "vnd.android.cursor.item/vnd.com.whatsapp.profile";
+    private static final String WA_STD_VOIP = "vnd.android.cursor.item/vnd.com.whatsapp.voip.call";
+    private static final String WA_BIZ_PROFILE = "vnd.android.cursor.item/vnd.com.whatsapp.w4b.profile";
+    private static final String WA_BIZ_VOIP = "vnd.android.cursor.item/vnd.com.whatsapp.w4b.voip.call";
+
+    /**
+     * Maps contactId -> (number tail -> WhatsApp flags). Read once per contact reload on the
+     * same background thread as {@link #readContacts()}. The existing READ_CONTACTS grant
+     * covers the Data table, so no extra permission is involved.
+     */
+    private Map<Long, Map<String, Integer>> readWhatsApp() {
+        Map<Long, Map<String, Integer>> map = new HashMap<Long, Map<String, Integer>>();
+        String[] projection = {
+            ContactsContract.Data.CONTACT_ID,
+            ContactsContract.Data.DATA1,
+            ContactsContract.Data.MIMETYPE
+        };
+        String selection = ContactsContract.Data.MIMETYPE + " IN (?, ?, ?, ?)";
+        String[] args = {WA_STD_PROFILE, WA_STD_VOIP, WA_BIZ_PROFILE, WA_BIZ_VOIP};
+        Cursor c = null;
+        try {
+            c = getContentResolver().query(
+                    ContactsContract.Data.CONTENT_URI, projection, selection, args, null);
+            if (c == null) {
+                return map;
+            }
+            while (c.moveToNext()) {
+                long contactId = c.getLong(0);
+                String data1 = c.getString(1);
+                String mime = c.getString(2);
+                if (data1 == null) {
+                    continue;
+                }
+                String key = T9Index.tail(data1);
+                if (key.isEmpty()) {
+                    continue;
+                }
+                int bit = mime != null && mime.contains(".w4b.") ? T9Index.WA_BIZ : T9Index.WA_STD;
+                Map<String, Integer> byNumber = map.get(Long.valueOf(contactId));
+                if (byNumber == null) {
+                    byNumber = new HashMap<String, Integer>();
+                    map.put(Long.valueOf(contactId), byNumber);
+                }
+                Integer prev = byNumber.get(key);
+                byNumber.put(key, Integer.valueOf((prev == null ? 0 : prev.intValue()) | bit));
+            }
+        } catch (SecurityException e) {
+            // Permission revoked mid-flight; treat everything as "no WhatsApp".
+        } finally {
+            if (c != null) {
+                c.close();
+            }
+        }
+        return map;
+    }
+
+    private static Integer waLookup(Map<Long, Map<String, Integer>> wa, long contactId, String number) {
+        Map<String, Integer> byNumber = wa.get(Long.valueOf(contactId));
+        Integer flags = byNumber == null ? null : byNumber.get(T9Index.tail(number));
+        return Integer.valueOf(flags == null ? 0 : flags.intValue());
+    }
+
+    /** WhatsApp packages actually installed, in {std, biz} order. */
+    private List<String> installedWhatsApps() {
+        List<String> out = new ArrayList<String>();
+        for (String pkg : new String[]{WA_PKG_STD, WA_PKG_BIZ}) {
+            try {
+                getPackageManager().getPackageInfo(pkg, 0);
+                out.add(pkg);
+            } catch (PackageManager.NameNotFoundException e) {
+                // not installed
+            }
+        }
+        return out;
+    }
+
+    private static String waAppName(String pkg) {
+        return WA_PKG_BIZ.equals(pkg) ? "WhatsApp Business" : "WhatsApp";
+    }
+
+    /** SIM/network region for turning a locally-typed number into E.164. Falls back to IL. */
+    private String regionIso() {
+        try {
+            TelephonyManager tm = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
+            if (tm != null) {
+                String iso = tm.getSimCountryIso();
+                if (iso == null || iso.isEmpty()) {
+                    iso = tm.getNetworkCountryIso();
+                }
+                if (iso != null && !iso.isEmpty()) {
+                    return iso.toUpperCase();
+                }
+            }
+        } catch (Exception e) {
+            // fall through to the default
+        }
+        return "IL";
+    }
+
+    /** Opens a specific WhatsApp package on a number's wa.me link, or the browser as a last resort. */
+    private void openWaPackage(String digits, String pkg) {
+        Uri uri = Uri.parse("https://wa.me/" + digits);
+        try {
+            Intent i = new Intent(Intent.ACTION_VIEW, uri);
+            if (pkg != null) {
+                i.setPackage(pkg);
+            }
+            startActivity(i);
+        } catch (ActivityNotFoundException e) {
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, uri));
+            } catch (ActivityNotFoundException e2) {
+                Toast.makeText(this, "WhatsApp not available", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    /**
+     * Opens a WhatsApp chat for any number -- contact or freshly typed -- via wa.me, so we
+     * never depend on the number already being a contact. The number is normalised to E.164
+     * against the SIM region ("0522978262" -> "972522978262"); if that fails we fall back to
+     * its raw digits.
+     *
+     * Which app: the panel preference wins when its app is available; otherwise we offer the
+     * installed apps that fit -- for a contact, those it is actually registered on; for a
+     * typed number, every installed WhatsApp. One candidate opens straight away; several
+     * raise a small chooser.
+     */
+    private void openWhatsApp(String number, int regFlags, boolean typed) {
+        if (number == null || number.isEmpty()) {
+            return;
+        }
+        String e164 = PhoneNumberUtils.formatNumberToE164(number, regionIso());
+        final String digits = e164 != null
+                ? (e164.startsWith("+") ? e164.substring(1) : e164)
+                : T9Index.digitsOf(number);
+        if (digits.isEmpty()) {
+            return;
+        }
+
+        List<String> installed = installedWhatsApps();
+        if (installed.isEmpty()) {
+            openWaPackage(digits, null);   // nothing installed: browser fallback
+            return;
+        }
+
+        // Candidates: installed apps that fit this number.
+        final List<String> candidates = new ArrayList<String>();
+        for (String pkg : installed) {
+            int bit = WA_PKG_BIZ.equals(pkg) ? T9Index.WA_BIZ : T9Index.WA_STD;
+            if (typed || regFlags == 0 || (regFlags & bit) != 0) {
+                candidates.add(pkg);
+            }
+        }
+        if (candidates.isEmpty()) {
+            candidates.addAll(installed);   // registered app not installed: offer what is
+        }
+
+        // Panel preference narrows the candidates when the chosen app is among them.
+        String pref = Prefs.waApp(this);
+        if (Prefs.WA_APP_STD.equals(pref) && candidates.contains(WA_PKG_STD)) {
+            openWaPackage(digits, WA_PKG_STD);
+            return;
+        }
+        if (Prefs.WA_APP_BIZ.equals(pref) && candidates.contains(WA_PKG_BIZ)) {
+            openWaPackage(digits, WA_PKG_BIZ);
+            return;
+        }
+        if (candidates.size() == 1) {
+            openWaPackage(digits, candidates.get(0));
+            return;
+        }
+        // Ask: several apps fit.
+        final String[] labels = new String[candidates.size()];
+        for (int i = 0; i < candidates.size(); i++) {
+            labels[i] = waAppName(candidates.get(i));
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Open with")
+                .setItems(labels, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface d, int which) {
+                        openWaPackage(digits, candidates.get(which));
+                    }
+                })
+                .show();
+    }
+
+    /** Contact-level badge tap: pick the registered number, then hand off to {@link #openWhatsApp}. */
+    private void openContactWhatsApp(T9Index.Contact c) {
+        String num = c.waNumber(resolveNumber(c));
+        if (num == null) {
+            return;
+        }
+        openWhatsApp(num, c.waFlags(c.numbers.indexOf(num)), false);
+    }
+
     private void refresh() {
         queryView.setText(query.toString());
         shown.clear();
@@ -557,13 +943,46 @@ public class MainActivity extends Activity {
         for (int i = hits.size() - 1; i >= 0; i--) {
             shown.add(hits.get(i));
         }
+        // No contact matched but the user has typed enough to be dialling a number: offer
+        // that raw number as the bottom (closest-to-keypad) row -- one tap calls it, and its
+        // WhatsApp badge messages it, even though it is nobody in the contact list.
+        boolean typedOffer = hits.isEmpty() && dialableQuery();
+        if (typedOffer) {
+            shown.add(typedNumberContact());
+        }
         adapter.notifyDataSetChanged();
         refreshFrequent();
-        if (query.length() > 0 && shown.isEmpty()) {
+        refreshHistory();
+        if (typedOffer) {
+            statusView.setText("Not in contacts");
+        } else if (query.length() > 0 && hits.isEmpty()) {
             statusView.setText("No match for " + query);
         } else {
             statusView.setText(all.size() + " contacts indexed");
         }
+    }
+
+    /** Enough digits typed that the query is plausibly a phone number rather than a name stub. */
+    private boolean dialableQuery() {
+        int digits = 0;
+        for (int i = 0; i < query.length(); i++) {
+            char ch = query.charAt(i);
+            if (ch >= '0' && ch <= '9') {
+                digits++;
+            }
+        }
+        return digits >= 3;
+    }
+
+    /** A throwaway contact (id -1) wrapping the typed number, for the offer row. */
+    private T9Index.Contact typedNumberContact() {
+        T9Index.Contact t = new T9Index.Contact();
+        t.id = -1;
+        t.name = query.toString();
+        t.numbers.add(dialable(query.toString()));
+        t.labels.add("");
+        t.whatsapp.add(Integer.valueOf(0));
+        return t;
     }
 
     // ------------------------------------------------------------ actions
@@ -578,6 +997,11 @@ public class MainActivity extends Activity {
     }
 
     private void onTap(T9Index.Contact c) {
+        if (c.id < 0) {
+            // The typed-number offer row: there is no contact to open, so always just dial.
+            call(resolveNumber(c), -1);
+            return;
+        }
         if (Prefs.TAP_OPEN.equals(Prefs.tapAction(this))) {
             openContact(c.id);
             return;
@@ -591,27 +1015,89 @@ public class MainActivity extends Activity {
     }
 
     private void showPanel(final T9Index.Contact c) {
+        if (c.id < 0) {
+            // Typed-number offer row: nothing to choose between, so long-press just dials.
+            call(resolveNumber(c), -1);
+            return;
+        }
         if (c.numbers.isEmpty()) {
             openContact(c.id);
             return;
         }
-        final String[] items = new String[c.numbers.size()];
-        for (int i = 0; i < items.length; i++) {
-            String label = c.labels.get(i);
-            items[i] = label.isEmpty()
-                    ? c.numbers.get(i)
-                    : c.numbers.get(i) + "   (" + label + ")";
-        }
         int checked = c.numbers.indexOf(resolveNumber(c));
         final int[] selected = {checked < 0 ? 0 : checked};
+        final boolean showWa = Prefs.waInPanel(this);
+
+        // A hand-built row list rather than setSingleChoiceItems: each line needs its own
+        // tappable WhatsApp badge, which the stock single-choice adapter cannot carry.
+        // Single-selection is managed by hand, mirroring the icon picker in Settings.
+        final LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(8), dp(4), dp(8), dp(4));
+
+        final RadioButton[] radios = new RadioButton[c.numbers.size()];
+        for (int i = 0; i < c.numbers.size(); i++) {
+            final int idx = i;
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(8), dp(6), dp(8), dp(6));
+            row.setBackground(themedBackground());
+
+            RadioButton rb = new RadioButton(this);
+            rb.setChecked(i == selected[0]);
+            radios[i] = rb;
+            row.addView(rb, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+            TextView label = new TextView(this);
+            String type = c.labels.get(i);
+            label.setText(type.isEmpty()
+                    ? c.numbers.get(i)
+                    : c.numbers.get(i) + "   (" + type + ")");
+            label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+            row.addView(label, new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+            final int waFlags = c.waFlags(i);
+            if (showWa && waFlags != 0) {
+                final String waNumber = c.numbers.get(i);
+                ImageView badge = new ImageView(this);
+                badge.setImageResource(R.drawable.ic_whatsapp);
+                int s = dp(44);
+                LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(s, s);
+                bp.setMarginStart(dp(4));
+                badge.setLayoutParams(bp);
+                badge.setBackground(themedBackground());
+                badge.setPadding(dp(9), dp(9), dp(9), dp(9));
+                badge.setContentDescription("Open WhatsApp");
+                badge.setOnClickListener(new View.OnClickListener() {
+                    public void onClick(View v) {
+                        openWhatsApp(waNumber, waFlags, false);
+                    }
+                });
+                row.addView(badge);
+            }
+
+            View.OnClickListener pick = new View.OnClickListener() {
+                public void onClick(View v) {
+                    selected[0] = idx;
+                    for (int k = 0; k < radios.length; k++) {
+                        radios[k].setChecked(k == idx);
+                    }
+                }
+            };
+            row.setOnClickListener(pick);
+            rb.setOnClickListener(pick);
+            list.addView(row);
+        }
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(list);
 
         new AlertDialog.Builder(this)
                 .setTitle(c.name)
-                .setSingleChoiceItems(items, selected[0], new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface d, int which) {
-                        selected[0] = which;
-                    }
-                })
+                .setView(scroll)
                 .setPositiveButton("Call", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int w) {
                         call(c.numbers.get(selected[0]), c.id);
@@ -704,18 +1190,81 @@ public class MainActivity extends Activity {
         }
 
         public View getView(int i, View reuse, ViewGroup parent) {
+            Row row;
             View v = reuse;
             if (v == null) {
-                v = getLayoutInflater().inflate(android.R.layout.simple_list_item_2, parent, false);
+                row = buildRow();
+                v = row.root;
+                v.setTag(row);
+            } else {
+                row = (Row) v.getTag();
             }
-            T9Index.Contact c = shown.get(i);
+            final T9Index.Contact c = shown.get(i);
+            final boolean typed = c.id < 0;
             String number = resolveNumber(c);
-            if (c.numbers.size() > 1) {
+            if (!typed && c.numbers.size() > 1) {
                 number = number + "   +" + (c.numbers.size() - 1) + " more";
             }
-            ((TextView) v.findViewById(android.R.id.text1)).setText(c.name);
-            ((TextView) v.findViewById(android.R.id.text2)).setText(number);
+            row.name.setText(c.name);
+            // The typed-number row explains its two taps; a contact row shows the number.
+            row.number.setText(typed ? "Tap to call · badge for WhatsApp" : number);
+            // The typed row always offers WhatsApp (wa.me works for any number, even one not
+            // in contacts); a contact row shows the badge only when a line is registered.
+            final boolean showBadge = typed
+                    || (Prefs.waInResults(MainActivity.this) && c.hasWhatsApp());
+            row.badge.setVisibility(showBadge ? View.VISIBLE : View.GONE);
+            row.badge.setOnClickListener(showBadge ? new View.OnClickListener() {
+                public void onClick(View x) {
+                    if (typed) {
+                        openWhatsApp(c.numbers.get(0), 0, true);
+                    } else {
+                        openContactWhatsApp(c);
+                    }
+                }
+            } : null);
             return v;
         }
+    }
+
+    /** Recycled row view for the result list: name/number on the start, WhatsApp badge on the end. */
+    private static final class Row {
+        LinearLayout root;
+        TextView name;
+        TextView number;
+        ImageView badge;
+    }
+
+    private Row buildRow() {
+        Row r = new Row();
+        r.root = new LinearLayout(this);
+        r.root.setOrientation(LinearLayout.HORIZONTAL);
+        r.root.setGravity(Gravity.CENTER_VERTICAL);
+        r.root.setPadding(dp(16), dp(10), dp(12), dp(10));
+
+        LinearLayout text = new LinearLayout(this);
+        text.setOrientation(LinearLayout.VERTICAL);
+        r.name = new TextView(this);
+        r.name.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+        r.number = new TextView(this);
+        r.number.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        r.number.setAlpha(0.7f);
+        text.addView(r.name);
+        text.addView(r.number);
+        r.root.addView(text, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        r.badge = new ImageView(this);
+        r.badge.setImageResource(R.drawable.ic_whatsapp);
+        // A generous 48dp square so the tap target is comfortable; the glyph stays small
+        // thanks to the inner padding.
+        int s = dp(48);
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(s, s);
+        bp.setMarginStart(dp(4));
+        r.badge.setLayoutParams(bp);
+        r.badge.setBackground(pillBackground());
+        r.badge.setPadding(dp(11), dp(11), dp(11), dp(11));
+        r.badge.setContentDescription("Open WhatsApp");
+        r.root.addView(r.badge);
+        return r;
     }
 }

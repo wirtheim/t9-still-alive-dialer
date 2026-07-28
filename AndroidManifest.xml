@@ -8,6 +8,18 @@
 
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!--
+        Package visibility (Android 11+): we never hold QUERY_ALL_PACKAGES. These entries
+        let us resolve and launch WhatsApp for a number the contacts provider says is
+        registered. Reading WhatsApp's own Data rows needs no query here; READ_CONTACTS
+        already covers the provider, so visibility only matters for the outgoing ACTION_VIEW.
+    -->
+    <queries>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+    </queries>
 
     <application
         android:label="@string/app_name"

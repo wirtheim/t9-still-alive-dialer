@@ -16,6 +16,25 @@ public final class Prefs {
     private static final String KEY_ICON = "icon";
     private static final String KEY_LAYOUT = "layout";
     private static final String NUM_PREFIX = "num_";
+    private static final String KEY_WA = "wa_enabled";
+    private static final String KEY_WA_RESULTS = "wa_results";
+    private static final String KEY_WA_TILES = "wa_tiles";
+    private static final String KEY_WA_PANEL = "wa_panel";
+    private static final String KEY_WA_APP = "wa_app";
+    private static final String KEY_HAPTIC = "haptic";
+    private static final String KEY_SEARCHES = "searches";
+
+    /** Which WhatsApp app a badge tap targets when both are installed. */
+    public static final String WA_APP_ASK = "ask";
+    public static final String WA_APP_STD = "std";
+    public static final String WA_APP_BIZ = "biz";
+
+    /** Vibration amplitude for a key press, 0 (off) .. 255. Default is deliberately gentle. */
+    public static final int HAPTIC_OFF = 0;
+    public static final int HAPTIC_MAX = 255;
+    public static final int HAPTIC_DEFAULT = 55;
+
+    private static final int SEARCH_HISTORY_MAX = 12;
 
     public static final String THEME_SYSTEM = "system";
     public static final String THEME_LIGHT = "light";
@@ -92,6 +111,124 @@ public final class Prefs {
 
     public static void setTapAction(Context c, String value) {
         of(c).edit().putString(KEY_TAP, value).apply();
+    }
+
+    // ---------------------------------------------------------------- whatsapp
+
+    /**
+     * Master switch for the WhatsApp badges. When off, no placement shows regardless of
+     * its own toggle -- the three placement getters all AND with this.
+     */
+    public static boolean waEnabled(Context c) {
+        return of(c).getBoolean(KEY_WA, true);
+    }
+
+    public static void setWaEnabled(Context c, boolean v) {
+        of(c).edit().putBoolean(KEY_WA, v).apply();
+    }
+
+    /** Search-result rows -- the one placement on by default. */
+    public static boolean waInResults(Context c) {
+        return waEnabled(c) && of(c).getBoolean(KEY_WA_RESULTS, true);
+    }
+
+    public static void setWaInResults(Context c, boolean v) {
+        of(c).edit().putBoolean(KEY_WA_RESULTS, v).apply();
+    }
+
+    public static boolean waInTiles(Context c) {
+        return waEnabled(c) && of(c).getBoolean(KEY_WA_TILES, false);
+    }
+
+    public static void setWaInTiles(Context c, boolean v) {
+        of(c).edit().putBoolean(KEY_WA_TILES, v).apply();
+    }
+
+    public static boolean waInPanel(Context c) {
+        return waEnabled(c) && of(c).getBoolean(KEY_WA_PANEL, false);
+    }
+
+    public static void setWaInPanel(Context c, boolean v) {
+        of(c).edit().putBoolean(KEY_WA_PANEL, v).apply();
+    }
+
+    /** Raw stored value of a placement toggle, ignoring the master (for the settings UI). */
+    public static boolean waResultsRaw(Context c) {
+        return of(c).getBoolean(KEY_WA_RESULTS, true);
+    }
+
+    public static boolean waTilesRaw(Context c) {
+        return of(c).getBoolean(KEY_WA_TILES, false);
+    }
+
+    public static boolean waPanelRaw(Context c) {
+        return of(c).getBoolean(KEY_WA_PANEL, false);
+    }
+
+    /** Preferred WhatsApp app for a badge tap; default "ask" offers whatever is installed. */
+    public static String waApp(Context c) {
+        return of(c).getString(KEY_WA_APP, WA_APP_ASK);
+    }
+
+    public static void setWaApp(Context c, String value) {
+        of(c).edit().putString(KEY_WA_APP, value).apply();
+    }
+
+    // --------------------------------------------------------------- haptics
+
+    public static int haptic(Context c) {
+        int v = of(c).getInt(KEY_HAPTIC, HAPTIC_DEFAULT);
+        return v < HAPTIC_OFF ? HAPTIC_OFF : (v > HAPTIC_MAX ? HAPTIC_MAX : v);
+    }
+
+    public static void setHaptic(Context c, int amplitude) {
+        of(c).edit().putInt(KEY_HAPTIC, amplitude).apply();
+    }
+
+    // --------------------------------------------------------- search history
+
+    /** Most-recent-first, de-duplicated, capped. Stored as newline-joined text. */
+    public static java.util.List<String> searches(Context c) {
+        java.util.List<String> out = new java.util.ArrayList<String>();
+        String raw = of(c).getString(KEY_SEARCHES, "");
+        if (raw.isEmpty()) {
+            return out;
+        }
+        for (String s : raw.split("\n")) {
+            if (!s.isEmpty()) {
+                out.add(s);
+            }
+        }
+        return out;
+    }
+
+    /** Pushes a query to the front, dropping any earlier copy and trimming to the cap. */
+    public static void addSearch(Context c, String query) {
+        if (query == null || query.isEmpty()) {
+            return;
+        }
+        java.util.List<String> list = searches(c);
+        list.remove(query);
+        list.add(0, query);
+        while (list.size() > SEARCH_HISTORY_MAX) {
+            list.remove(list.size() - 1);
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < list.size(); i++) {
+            if (i > 0) {
+                sb.append('\n');
+            }
+            sb.append(list.get(i));
+        }
+        of(c).edit().putString(KEY_SEARCHES, sb.toString()).apply();
+    }
+
+    public static int searchesCount(Context c) {
+        return searches(c).size();
+    }
+
+    public static void clearSearches(Context c) {
+        of(c).edit().remove(KEY_SEARCHES).apply();
     }
 
     // ---------------------------------------------------------- default number
