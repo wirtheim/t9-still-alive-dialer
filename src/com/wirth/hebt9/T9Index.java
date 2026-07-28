@@ -144,6 +144,24 @@ public final class T9Index {
         return sb.toString();
     }
 
+    /** Number of trailing digits used to match numbers across differing formats. */
+    private static final int TAIL = 9;
+
+    /**
+     * Last {@link #TAIL} digits of a number, format-agnostic. WhatsApp's Data rows store
+     * the number its own way (often with the country code, sometimes as a jid), while the
+     * contact's Phone row keeps whatever the user typed. Comparing tails bridges the two:
+     * "+972 52-297-8262" and "0522978262" both reduce to "522978262".
+     */
+    public static String tail(String number) {
+        String d = digitsOf(number);
+        return d.length() <= TAIL ? d : d.substring(d.length() - TAIL);
+    }
+
+    /** WhatsApp registration bits, OR-ed together per number. */
+    public static final int WA_STD = 1;   // consumer WhatsApp (com.whatsapp)
+    public static final int WA_BIZ = 2;   // WhatsApp Business (com.whatsapp.w4b)
+
     public static final class Contact {
         public long id;
         public String name;
@@ -151,6 +169,12 @@ public final class T9Index {
         public final List<String> numbers = new ArrayList<String>();
         /** Type label per number ("Mobile", "Home", ...), parallel to {@link #numbers}. */
         public final List<String> labels = new ArrayList<String>();
+        /**
+         * WhatsApp registration flags per number ({@link #WA_STD}/{@link #WA_BIZ}, 0 = none),
+         * parallel to {@link #numbers}. Detection only -- opening a chat goes through a wa.me
+         * link, not this flag.
+         */
+        public final List<Integer> whatsapp = new ArrayList<Integer>();
         public String[] words = new String[0];
         /**
          * joined[w] is words[w..end] concatenated, so typing straight through a space
@@ -170,6 +194,39 @@ public final class T9Index {
             for (int i = 0; i < numbers.size(); i++) {
                 numberDigits[i] = digitsOf(numbers.get(i));
             }
+        }
+
+        /** True when at least one of the contact's numbers is registered on any WhatsApp. */
+        public boolean hasWhatsApp() {
+            for (int i = 0; i < whatsapp.size(); i++) {
+                if (waFlags(i) != 0) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /** Registration flags for numbers.get(i), or 0. Tolerates a short/absent parallel list. */
+        public int waFlags(int i) {
+            if (i < 0 || i >= whatsapp.size()) {
+                return 0;
+            }
+            Integer f = whatsapp.get(i);
+            return f == null ? 0 : f.intValue();
+        }
+
+        /** First number on any WhatsApp, preferring the given one; null if none. */
+        public String waNumber(String preferred) {
+            int idx = preferred == null ? -1 : numbers.indexOf(preferred);
+            if (waFlags(idx) != 0) {
+                return preferred;
+            }
+            for (int i = 0; i < numbers.size(); i++) {
+                if (waFlags(i) != 0) {
+                    return numbers.get(i);
+                }
+            }
+            return null;
         }
 
         /** True when any of the contact's numbers contains the typed digits. */

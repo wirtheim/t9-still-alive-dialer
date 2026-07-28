@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    WhatsApp presence badge: a generic speech bubble with a phone handset, tinted the
+    familiar messaging green. Deliberately a stylized glyph, not the official WhatsApp
+    logo, so it reads as "this number is reachable on WhatsApp" without lifting the mark.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#25D366">
+
+    <!-- rounded chat bubble with a tail at the bottom-left -->
+    <path
+        android:fillColor="#25D366"
+        android:pathData="M12,2C6.48,2 2,6.03 2,11c0,1.77 0.57,3.42 1.56,4.82L2.2,20.4c-0.13,0.44 0.28,0.85 0.72,0.72l4.7,-1.37C9.0,20.55 10.46,21 12,21c5.52,0 10,-4.03 10,-9C22,6.03 17.52,2 12,2z" />
+
+    <!-- handset silhouette punched through the bubble in white -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M9.2,7.2c-0.28,-0.02 -0.57,0.08 -0.78,0.32C8.09,7.9 7.6,8.36 7.6,9.3c0,0.94 0.69,1.85 0.78,1.98c0.1,0.13 1.36,2.17 3.36,2.96c1.66,0.66 2.0,0.53 2.36,0.5c0.36,-0.03 1.16,-0.47 1.32,-0.94c0.16,-0.47 0.16,-0.87 0.11,-0.96c-0.05,-0.09 -0.18,-0.14 -0.38,-0.24c-0.2,-0.1 -1.16,-0.57 -1.34,-0.64c-0.18,-0.07 -0.31,-0.1 -0.44,0.1c-0.13,0.2 -0.5,0.64 -0.62,0.77c-0.11,0.13 -0.23,0.15 -0.42,0.05c-0.2,-0.1 -0.83,-0.31 -1.58,-0.98c-0.58,-0.52 -0.98,-1.17 -1.1,-1.36c-0.11,-0.2 -0.01,-0.3 0.09,-0.4c0.09,-0.09 0.2,-0.23 0.29,-0.35c0.1,-0.12 0.13,-0.2 0.2,-0.34c0.06,-0.13 0.03,-0.25 -0.02,-0.35C10.4,8.5 10.0,7.55 9.83,7.2C9.7,6.94 9.5,6.95 9.35,6.94C9.3,6.94 9.25,6.93 9.2,7.2z" />
+</vector>
